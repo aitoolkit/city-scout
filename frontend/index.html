@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityRisk Scout</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: rgba(255,255,255,0.08);
+    --text: #e8e9f0;
+    --muted: #8a8fa8;
+    --accent: #6366f1;
+    --accent-glow: rgba(99,102,241,0.2);
+    --low: #22c55e;
+    --medium: #f59e0b;
+    --high: #f97316;
+    --critical: #ef4444;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 16px 80px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 50%, #6366f1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  header p {
+    color: var(--muted);
+    margin-top: 8px;
+    font-size: 0.95rem;
+  }
+
+  .search-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 540px;
+    margin-bottom: 32px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .input-row input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 1rem;
+    padding: 12px 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .input-row input:focus {
+    border-color: var(--accent);
+  }
+
+  .input-row input::placeholder { color: var(--muted); }
+
+  .input-row button {
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 12px 24px;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .input-row button:hover { opacity: 0.9; }
+  .input-row button:active { transform: scale(0.98); }
+  .input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .hint {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 10px;
+  }
+
+  /* Loading */
+  .loader {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 40px 0;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loader p { color: var(--muted); font-size: 0.9rem; }
+
+  /* Error */
+  .error-box {
+    display: none;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 10px;
+    color: #fca5a5;
+    font-size: 0.9rem;
+    margin-top: 16px;
+    padding: 12px 16px;
+  }
+
+  /* Report */
+  #report {
+    display: none;
+    width: 100%;
+    max-width: 720px;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .report-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+  }
+
+  .report-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 4px 12px;
+    text-transform: uppercase;
+  }
+
+  .badge.low    { background: rgba(34,197,94,0.15);  color: var(--low); }
+  .badge.medium { background: rgba(245,158,11,0.15); color: var(--medium); }
+  .badge.high   { background: rgba(249,115,22,0.15); color: var(--high); }
+  .badge.critical { background: rgba(239,68,68,0.15); color: var(--critical); }
+
+  .score-row {
+    align-items: center;
+    display: flex;
+    gap: 16px;
+    margin: 16px 0 12px;
+  }
+
+  .score-ring {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+  }
+
+  .score-ring svg { transform: rotate(-90deg); }
+
+  .score-ring .score-val {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    transform: none;
+  }
+
+  .exec-summary {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+
+  .meta {
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 12px;
+  }
+
+  /* Categories */
+  .categories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 16px;
+  }
+
+  .category-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .category-card h3 {
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .progress-bar {
+    background: var(--surface2);
+    border-radius: 4px;
+    height: 4px;
+    margin: 10px 0;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    border-radius: 4px;
+    height: 100%;
+    transition: width 0.6s ease;
+  }
+
+  .progress-fill.low    { background: var(--low); }
+  .progress-fill.medium { background: var(--medium); }
+  .progress-fill.high   { background: var(--high); }
+  .progress-fill.critical { background: var(--critical); }
+
+  .category-summary { color: var(--muted); font-size: 0.82rem; line-height: 1.5; }
+
+  .signals-list {
+    margin-top: 10px;
+    list-style: none;
+  }
+
+  .signals-list li {
+    color: var(--muted);
+    font-size: 0.78rem;
+    padding: 4px 0;
+    padding-left: 14px;
+    position: relative;
+    line-height: 1.4;
+  }
+
+  .signals-list li::before {
+    content: "·";
+    position: absolute;
+    left: 4px;
+    color: var(--accent);
+  }
+
+  /* Sources */
+  .sources-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+
+  .sources-card h3 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .sources-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    list-style: none;
+  }
+
+  .sources-list li a {
+    color: var(--accent);
+    font-size: 0.8rem;
+    text-decoration: none;
+    background: var(--accent-glow);
+    border-radius: 6px;
+    padding: 4px 10px;
+    display: inline-block;
+    transition: opacity 0.15s;
+    word-break: break-all;
+  }
+
+  .sources-list li a:hover { opacity: 0.8; }
+
+  .disclaimer {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-style: italic;
+    padding: 0 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CityRisk Scout</h1>
+  <p>AI-powered risk assessment from open-source intelligence</p>
+</header>
+
+<div class="search-card">
+  <div class="input-row">
+    <input type="text" id="city-input" placeholder="Enter a city (e.g. Kabul, Kyiv, Port-au-Prince)" autocomplete="off"/>
+    <button id="assess-btn" onclick="assess()">Assess</button>
+  </div>
+  <p class="hint">Sources: GDELT, Reddit, Google News, Wikipedia · Powered by Claude</p>
+  <div class="error-box" id="error-box"></div>
+</div>
+
+<div class="loader" id="loader">
+  <div class="spinner"></div>
+  <p id="loader-msg">Collecting signals from global news sources…</p>
+</div>
+
+<div id="report"></div>
+
+<script>
+const LOADER_MSGS = [
+  "Collecting signals from global news sources…",
+  "Scraping Reddit and GDELT…",
+  "Parsing Google News RSS…",
+  "Sending signals to Claude for analysis…",
+  "Building your risk report…",
+];
+
+let loaderInterval = null;
+
+function startLoader() {
+  let i = 0;
+  document.getElementById("loader-msg").textContent = LOADER_MSGS[0];
+  loaderInterval = setInterval(() => {
+    i = (i + 1) % LOADER_MSGS.length;
+    document.getElementById("loader-msg").textContent = LOADER_MSGS[i];
+  }, 2800);
+}
+
+function stopLoader() {
+  clearInterval(loaderInterval);
+}
+
+function levelColor(level) {
+  return { low: "#22c55e", medium: "#f59e0b", high: "#f97316", critical: "#ef4444" }[level] || "#8a8fa8";
+}
+
+function renderScoreRing(score, level) {
+  const r = 28, cx = 36, cy = 36;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+  const color = levelColor(level);
+  return `
+    <div class="score-ring">
+      <svg width="72" height="72" viewBox="0 0 72 72">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="5"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="5"
+          stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/>
+      </svg>
+      <div class="score-val" style="color:${color}">${score}</div>
+    </div>`;
+}
+
+function renderReport(data) {
+  const lvlColor = levelColor(data.overall_level);
+  const sources = (data.key_sources || []).map(s => {
+    const display = s.length > 50 ? s.slice(0, 50) + "…" : s;
+    return `<li><a href="${s}" target="_blank" rel="noopener">${display}</a></li>`;
+  }).join("");
+
+  const categories = (data.categories || []).map(cat => `
+    <div class="category-card">
+      <h3>
+        <span>${cat.name}</span>
+        <span class="badge ${cat.level}">${cat.level}</span>
+      </h3>
+      <div class="progress-bar">
+        <div class="progress-fill ${cat.level}" style="width:${cat.score}%"></div>
+      </div>
+      <p class="category-summary">${cat.summary}</p>
+      <ul class="signals-list">
+        ${(cat.signals || []).map(s => `<li>${s}</li>`).join("")}
+      </ul>
+    </div>
+  `).join("");
+
+  return `
+    <div class="report-header">
+      <h2>${data.city}</h2>
+      <div class="score-row">
+        ${renderScoreRing(data.overall_score, data.overall_level)}
+        <div>
+          <span class="badge ${data.overall_level}">${data.overall_level} risk</span>
+          <p class="exec-summary" style="margin-top:8px">${data.executive_summary}</p>
+        </div>
+      </div>
+      <p class="meta">${data.signals_collected} signals collected · ${new Date().toLocaleString()}</p>
+    </div>
+
+    <div class="categories-grid">${categories}</div>
+
+    ${sources ? `
+    <div class="sources-card">
+      <h3>Key sources</h3>
+      <ul class="sources-list">${sources}</ul>
+    </div>` : ""}
+
+    <p class="disclaimer">${data.disclaimer}</p>
+  `;
+}
+
+async function assess() {
+  const city = document.getElementById("city-input").value.trim();
+  if (!city) return;
+
+  const btn = document.getElementById("assess-btn");
+  const loader = document.getElementById("loader");
+  const report = document.getElementById("report");
+  const errorBox = document.getElementById("error-box");
+
+  btn.disabled = true;
+  errorBox.style.display = "none";
+  loader.style.display = "flex";
+  report.style.display = "none";
+  startLoader();
+
+  try {
+    const res = await fetch("/api/assess", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ city }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || "Server error");
+    }
+
+    report.innerHTML = renderReport(data);
+    report.style.display = "flex";
+  } catch (err) {
+    errorBox.textContent = "Error: " + err.message;
+    errorBox.style.display = "block";
+  } finally {
+    stopLoader();
+    loader.style.display = "none";
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("city-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") assess();
+});
+</script>
+</body>
+</html>
