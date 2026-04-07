@@ -2,7 +2,7 @@
 Scraper module — uses Scrapling to collect signals from multiple free sources.
 
 Sources:
-  - GDELT Project API  : global news event database, no key needed
+  - ReliefWeb API      : UN OCHA humanitarian/disaster/crisis reports, no key needed
   - Reddit JSON API    : public search endpoint, no auth needed
   - Google News RSS    : XML feed for latest headlines
   - Wikipedia REST API : city context and background
@@ -21,46 +21,59 @@ from models import RawSignal
 logger = logging.getLogger(__name__)
 
 # One shared Fetcher instance (lightweight, no browser)
-_fetcher = Fetcher(auto_match=False)
+_fetcher = Fetcher()
 
 
 def _safe_get(url: str, timeout: int = 10) -> str | None:
     """Fetch a URL via Scrapling, returning raw text or None on failure."""
     try:
         page = _fetcher.get(url, timeout=timeout, stealthy_headers=True)
-        return page.content
+        return page.body
     except Exception as exc:
         logger.warning("Failed to fetch %s: %s", url, exc)
         return None
 
 
 # ---------------------------------------------------------------------------
-# GDELT Project — global news event index (JSON, free, no key)
+# ReliefWeb (UN OCHA) — humanitarian / disaster / crisis reports (JSON, free, no key)
 # ---------------------------------------------------------------------------
 
-def _scrape_gdelt(city: str, max_articles: int = 15) -> list[RawSignal]:
+def _scrape_reliefweb(city: str, max_articles: int = 15) -> list[RawSignal]:
     signals: list[RawSignal] = []
-    query = quote_plus(f'"{city}" (risk OR conflict OR disaster OR crisis OR safety)')
+    query = quote_plus(f"{city} disaster OR crisis OR conflict OR risk OR safety")
     url = (
-        f"https://api.gdeltproject.org/api/v2/doc/doc"
-        f"?query={query}&mode=artlist&maxrecords={max_articles}&format=json"
+        f"https://api.reliefweb.int/v1/reports"
+        f"?appname=city-risk-scout"
+        f"&query[value]={query}"
+        f"&fields[include][]=title"
+        f"&fields[include][]=url"
+        f"&fields[include][]=date.created"
+        f"&fields[include][]=source"
+        f"&limit={max_articles}"
+        f"&sort[]=date.created:desc"
     )
-    raw = _safe_get(url)
+    raw = _safe_get(url, timeout=15)
     if not raw:
         return signals
 
     try:
         data = json.loads(raw)
-        for art in data.get("articles", []):
+        for item in data.get("data", []):
+            fields = item.get("fields", {})
+            title = fields.get("title", "")
+            art_url = fields.get("url", "")
+            published = fields.get("date", {}).get("created", "")
+            sources = fields.get("source", [])
+            source_name = sources[0].get("name", "ReliefWeb") if sources else "ReliefWeb"
             signals.append(RawSignal(
-                source="GDELT / Global News",
-                title=art.get("title", ""),
-                snippet=art.get("seendate", "") + " — " + art.get("domain", ""),
-                url=art.get("url"),
-                published=art.get("seendate"),
+                source=f"ReliefWeb / {source_name}",
+                title=title,
+                snippet=published,
+                url=art_url,
+                published=published,
             ))
     except (json.JSONDecodeError, KeyError) as exc:
-        logger.warning("GDELT parse error: %s", exc)
+        logger.warning("ReliefWeb parse error: %s", exc)
 
     return signals
 
@@ -182,7 +195,7 @@ def collect_signals(city: str) -> list[RawSignal]:
     import concurrent.futures
 
     tasks = [
-        lambda c=city: _scrape_gdelt(c),
+        lambda c=city: _scrape_reliefweb(c),
         lambda c=city: _scrape_reddit(c),
         lambda c=city: _scrape_google_news(c),
         lambda c=city: _scrape_wikipedia(c),

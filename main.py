@@ -4,7 +4,7 @@ CityRisk Scout — FastAPI backend
 
 import logging
 import time
-from contextlib import asyncio_contextmanager
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from analyzer import analyze
+from analyzer import analyze, get_provider
 from models import CityRequest, RiskReport
 from scraper import collect_signals
 
@@ -74,4 +74,7 @@ async def assess_city(request: CityRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "llm_provider": get_provider().display_name,
+    }
