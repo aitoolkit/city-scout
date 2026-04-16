@@ -16,8 +16,8 @@ import logging
 import re
 from abc import ABC, abstractmethod
 
-from models import RawSignal, RiskCategory, RiskReport
-from config import settings
+from .models import RawSignal, RiskCategory, RiskReport
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ Score rubric:
 Base your assessment ONLY on the provided signals.
 If signals are absent or neutral, default to "low".
 Never speculate beyond what the evidence supports.
+key_sources must be full absolute URLs (starting with http:// or https://). Never include localhost or relative paths.
 """.strip()
 
 
@@ -187,6 +188,17 @@ def _extract_json(raw: str) -> str:
     return raw
 
 
+def _sanitize_sources(sources: list[str]) -> list[str]:
+    """Keep only absolute http/https URLs, drop localhost and relative paths."""
+    cleaned = []
+    for s in sources:
+        s = s.strip()
+        if s.startswith("http://") or s.startswith("https://"):
+            if "localhost" not in s and "127.0.0.1" not in s:
+                cleaned.append(s)
+    return cleaned
+
+
 def _parse_response(raw: str, city: str, signals: list[RawSignal]) -> RiskReport:
     cleaned = _extract_json(raw)
     try:
@@ -215,7 +227,7 @@ def _parse_response(raw: str, city: str, signals: list[RawSignal]) -> RiskReport
         overall_level=data.get("overall_level", "low"),
         executive_summary=data.get("executive_summary", ""),
         categories=categories,
-        key_sources=data.get("key_sources", []),
+        key_sources=_sanitize_sources(data.get("key_sources", [])),
         disclaimer=data.get("disclaimer", ""),
         signals_collected=len(signals),
     )

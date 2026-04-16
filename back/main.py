@@ -4,17 +4,16 @@ CityRisk Scout — FastAPI backend
 
 import logging
 import time
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from analyzer import analyze, get_provider
-from models import CityRequest, RiskReport
-from scraper import collect_signals
+from .analyzer import analyze, get_provider
+from .models import CityRequest, RiskReport
+from .scraper import collect_signals
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,14 +34,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve the frontend
-frontend_dir = Path(__file__).parent / "frontend"
-app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+# Serve the frontend (one level up from this file, then into front/)
+front_dir = Path(__file__).parent.parent / "front"
+app.mount("/static", StaticFiles(directory=str(front_dir)), name="static")
 
 
 @app.get("/")
 async def root():
-    return FileResponse(str(frontend_dir / "index.html"))
+    return FileResponse(str(front_dir / "index.html"))
 
 
 @app.post("/api/assess", response_model=RiskReport)
@@ -59,7 +58,7 @@ async def assess_city(request: CityRequest):
             detail="Could not collect any signals for this city. Try again or check your network.",
         )
 
-    # 2. Analyze with Claude
+    # 2. Analyze with LLM
     try:
         report = analyze(city, signals)
     except ValueError as exc:

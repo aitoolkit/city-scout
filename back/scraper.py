@@ -8,7 +8,6 @@ Sources:
   - Wikipedia REST API : city context and background
 """
 
-import asyncio
 import json
 import logging
 import xml.etree.ElementTree as ET
@@ -16,11 +15,10 @@ from urllib.parse import quote_plus
 
 from scrapling.fetchers import Fetcher
 
-from models import RawSignal
+from .models import RawSignal
 
 logger = logging.getLogger(__name__)
 
-# One shared Fetcher instance (lightweight, no browser)
 _fetcher = Fetcher()
 
 

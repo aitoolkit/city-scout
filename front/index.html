@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityRisk Scout</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+  <h1>CityRisk Scout</h1>
+  <p>AI-powered risk assessment from open-source intelligence</p>
+</header>
+
+<div class="search-card">
+  <div class="input-row">
+    <input type="text" id="city-input" placeholder="Enter a city (e.g. Kabul, Kyiv, Port-au-Prince)" autocomplete="off"/>
+    <button id="assess-btn" onclick="assess()">Assess</button>
+  </div>
+  <p class="hint">Sources: ReliefWeb, Reddit, Google News, Wikipedia</p>
+  <div class="error-box" id="error-box"></div>
+</div>
+
+<div class="loader" id="loader">
+  <div class="spinner"></div>
+  <p id="loader-msg">Collecting signals from global news sources…</p>
+</div>
+
+<div id="report"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
