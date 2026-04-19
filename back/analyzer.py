@@ -277,6 +277,9 @@ def _build_user_message(city: str, signals: list[RawSignal]) -> str:
 
 def analyze(city: str, signals: list[RawSignal]) -> RiskReport:
     user_message = _build_user_message(city, signals)
+    logger.info("------------------------")
+    logger.info("User message:\n%s", user_message)
+    logger.info("------------------------")
     logger.info(
         "Analyzing city=%s | signals=%d | provider=%s",
         city, len(signals), _provider.display_name,
