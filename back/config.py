@@ -34,7 +34,8 @@ class Settings:
     openai_max_tokens: int
 
     # --- Shared ---
-    max_signals: int  # cap signals sent to the LLM per request
+    max_signals: int      # cap signals sent to the LLM per request
+    max_prompt_chars: int  # hard char budget for the user message (prevents 413s)
 
 
 def load() -> Settings:
@@ -49,7 +50,10 @@ def load() -> Settings:
         openai_model=os.getenv("OPENAI_MODEL", "llama-3.2-1b-instruct"),
         openai_max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "1500")),
 
-        max_signals=int(os.getenv("MAX_SIGNALS", "40")),
+        max_signals=int(os.getenv("MAX_SIGNALS", "20")),
+        # ~3 500 tokens for user message — safe under a 6 000-TPM limit when
+        # the system prompt (~900 tok) and response (~600 tok) are accounted for.
+        max_prompt_chars=int(os.getenv("MAX_PROMPT_CHARS", "12000")),
     )
 
 

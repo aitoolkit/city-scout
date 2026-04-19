@@ -1,2 +1,17 @@
+# Secrets
 .env
-*__pycache__*/*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+
+# Test cache
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db

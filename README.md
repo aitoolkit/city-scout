@@ -1,69 +1,132 @@
 # CityRisk Scout
 
-AI-powered city risk assessment using open-source intelligence.
-Scrapes public news and humanitarian reports with **Scrapling**, then uses an **LLM** (Anthropic or any OpenAI-compatible API) to generate a structured risk report.
+**AI-powered risk assessment for any city in the world — from open-source intelligence.**
 
-## Architecture
+Type a city name. The tool scrapes four public data sources in parallel, feeds the results to an LLM, and returns a structured risk report in seconds. No proprietary data feeds, no paid intelligence subscriptions.
+
+> **Disclaimer:** This is a portfolio/research tool. Risk scores depend on what public sources happen to publish on a given day and should not be used as a substitute for professional security analysis.
+
+---
+
+## Demo
+
+<!-- Add a screenshot or GIF of an actual report here (e.g. Kyiv or Caracas) -->
+<!-- Tip: run the app, assess a high-signal city, and screenshot the result -->
+> _Screenshot coming soon_
+
+---
+
+## How it works
 
 ```
-User (web form)
-  → FastAPI backend  (back/)
-    → Scrapling scraper (concurrent, 4 sources)
-      ├── ReliefWeb API      (UN OCHA humanitarian/disaster/crisis reports)
-      ├── Reddit JSON API    (public search, no auth)
-      ├── Google News RSS    (latest headlines)
-      └── Wikipedia REST API (city background context)
-    → LLM API (structured JSON analysis)
-  → Risk Report (5 categories, score 0-100, sources)
+User types a city
+  → FastAPI backend
+    → Scrapling scraper (4 sources, concurrent)
+        ├── ReliefWeb API   — UN OCHA humanitarian & crisis reports
+        ├── Reddit JSON API — public community discussions (no auth)
+        ├── Google News RSS — latest headlines
+        └── Wikipedia REST  — city background context
+    → Signal list trimmed to token budget (no 413 errors)
+    → LLM prompt → structured JSON response
+  → Risk report: 5 categories, score 0-100, key sources
 ```
 
-## Project structure
+---
 
-```
-city-risk-scout/
-├── back/           # FastAPI app, scraper, analyzer, models
-├── front/          # HTML, CSS, JavaScript (served as static files)
-├── tests/          # Unit tests (pytest)
-├── .env.example    # Environment variable template
-└── pyproject.toml
-```
+## Risk categories
 
-## Risk categories assessed
+| # | Category | What it covers |
+|---|---|---|
+| 1 | Political stability | Elections, coups, sanctions, governance crises |
+| 2 | Civil unrest & crime | Protests, violence, crime indicators |
+| 3 | Natural disaster & environment | Earthquakes, floods, wildfires, pollution |
+| 4 | Health & humanitarian | Epidemics, displacement, food insecurity |
+| 5 | Infrastructure & economy | Power outages, transport, financial instability |
 
-| Category | Description |
-|---|---|
-| Political stability | Elections, coups, sanctions, governance |
-| Civil unrest & crime | Protests, violence, crime rates |
-| Natural disaster & environment | Earthquakes, floods, wildfires, pollution |
-| Health & humanitarian | Epidemics, displacement, food insecurity |
-| Infrastructure & economy | Power, transport, financial instability |
+Each category gets a score (0–100) and a level: **low / medium / high / critical**.
 
-## Setup
+---
+
+## Quick start
 
 ```bash
-# 1. Clone / copy this project
+# 1. Clone
+git clone https://github.com/YOUR_USERNAME/city-risk-scout.git
 cd city-risk-scout
 
-# 2. Install dependencies (requires Poetry)
+# 2. Install (requires Python 3.13+ and Poetry)
 poetry install
 
-# 3. Copy and fill in env file
+# 3. Configure
 cp .env.example .env
-# Edit .env — set LLM_PROVIDER and the matching API key/URL
+# Edit .env — set LLM_PROVIDER and the matching API key or local URL
 
 # 4. Run
 poetry run uvicorn back.main:app --reload
 ```
 
-Then open `http://localhost:8000` in your browser.
+Open `http://localhost:8000` in your browser.
+
+---
 
 ## LLM providers
 
-| Provider | `LLM_PROVIDER` | Required env vars |
+The analyzer is provider-agnostic — swap backends via a single env var.
+
+| Provider | `LLM_PROVIDER` | Required vars |
 |---|---|---|
-| Anthropic (Claude) | `anthropic` | `ANTHROPIC_API_KEY` |
-| LM Studio / Ollama / vLLM | `openai` | `OPENAI_BASE_URL`, `OPENAI_MODEL` |
-| Together AI / OpenRouter | `openai` | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` |
+| **Anthropic** (Claude) | `anthropic` | `ANTHROPIC_API_KEY` |
+| **LM Studio / Ollama** (local, free) | `openai` | `OPENAI_BASE_URL`, `OPENAI_MODEL` |
+| **Groq** (fast free tier) | `openai` | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` |
+| **Together AI / OpenRouter** | `openai` | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` |
+
+Any OpenAI-compatible API works. The abstraction lives in [`back/analyzer.py`](back/analyzer.py).
+
+### Token budget for free-tier APIs
+
+Free-tier models (e.g. Groq's 6 000-TPM limit) can hit 413 errors with large signal sets.
+Two env vars control the payload size — see `.env.example` for guidance:
+
+```env
+MAX_SIGNALS=20        # signals passed to the LLM (default: 20)
+MAX_PROMPT_CHARS=12000 # hard char budget before signals are cut (default: 12000)
+```
+
+---
+
+## Project structure
+
+```
+city-risk-scout/
+├── back/
+│   ├── main.py       # FastAPI app, /api/assess endpoint
+│   ├── scraper.py    # Scrapling-based concurrent scraper (4 sources)
+│   ├── analyzer.py   # LLM provider abstraction + prompt builder
+│   ├── models.py     # Pydantic models (RawSignal, RiskReport, …)
+│   └── config.py     # Settings singleton (reads .env)
+├── front/
+│   ├── index.html
+│   ├── app.js
+│   └── style.css
+├── tests/
+├── .env.example
+└── pyproject.toml
+```
+
+---
+
+## Data sources
+
+All free, no API keys required for scraping.
+
+| Source | Endpoint | Signal type |
+|---|---|---|
+| ReliefWeb (UN OCHA) | `api.reliefweb.int/v1/reports` | Humanitarian & crisis reports |
+| Reddit | `reddit.com/search.json` | Community discussions |
+| Google News | RSS feed | Latest headlines |
+| Wikipedia | `en.wikipedia.org/api/rest_v1` | City background |
+
+---
 
 ## Running tests
 
@@ -71,24 +134,11 @@ Then open `http://localhost:8000` in your browser.
 poetry run pytest tests/ -v
 ```
 
+---
+
 ## Why Scrapling?
 
-- **Adaptive parsing**: survives website layout changes without rewriting selectors
-- **Stealth headers**: reduces bot-detection blocks on news sites
-- **Concurrent**: all 4 sources scraped in parallel via `ThreadPoolExecutor`
-- **Zero extra dependencies**: one library replaces Requests + BeautifulSoup for this use case
-
-## Data sources (all free, no API keys)
-
-| Source | Endpoint | What it provides |
-|---|---|---|
-| ReliefWeb | `api.reliefweb.int/v1/reports` | UN OCHA humanitarian & crisis reports |
-| Reddit | `reddit.com/search.json` | Community discussions |
-| Google News | RSS feed | Latest headlines |
-| Wikipedia | `en.wikipedia.org/api/rest_v1` | City background |
-
-## Notes
-
-- **Not a replacement for professional risk analysis.** This is a portfolio/demo project.
-- Reddit and Google News scraping depends on their public endpoints remaining accessible.
-- All scraping uses public, unauthenticated endpoints only.
+- Adaptive parsing — survives layout changes without rewriting selectors
+- Stealth headers — reduces bot-detection blocks on news sites
+- Concurrent — all 4 sources scraped in parallel via `ThreadPoolExecutor`
+- Replaces Requests + BeautifulSoup for this use case with a single dependency

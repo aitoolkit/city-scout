@@ -239,21 +239,40 @@ def _parse_response(raw: str, city: str, signals: list[RawSignal]) -> RiskReport
 
 def _build_user_message(city: str, signals: list[RawSignal]) -> str:
     cap = settings.max_signals
-    lines = [
+    char_budget = settings.max_prompt_chars
+    snippet_max = 150  # chars per snippet — keeps individual signals concise
+
+    header_lines = [
         f"City: {city}",
-        f"Total signals collected: {len(signals)} (sending top {min(len(signals), cap)})",
         "",
         "--- SIGNALS ---",
     ]
-    for i, s in enumerate(signals[:cap], 1):
-        lines.append(
-            f"\n[{i}] Source: {s.source}"
+    header = "\n".join(header_lines)
+    body_parts: list[str] = []
+    chars_used = len(header)
+    included = 0
+
+    for s in signals[:cap]:
+        snippet = (s.snippet or "")[:snippet_max]
+        block = (
+            f"\n[{included + 1}] Source: {s.source}"
             + (f" | Published: {s.published}" if s.published else "")
             + f"\nTitle: {s.title}"
-            + (f"\nSnippet: {s.snippet}" if s.snippet else "")
+            + (f"\nSnippet: {snippet}" if snippet else "")
             + (f"\nURL: {s.url}" if s.url else "")
         )
-    return "\n".join(lines)
+        if chars_used + len(block) > char_budget:
+            logger.info(
+                "Prompt char budget (%d) reached after %d/%d signals — truncating.",
+                char_budget, included, min(len(signals), cap),
+            )
+            break
+        body_parts.append(block)
+        chars_used += len(block)
+        included += 1
+
+    summary = f"Total signals collected: {len(signals)} (sending {included})"
+    return header_lines[0] + "\n" + summary + "\n" + "\n".join(header_lines[1:]) + "\n".join(body_parts)
 
 
 def analyze(city: str, signals: list[RawSignal]) -> RiskReport:
