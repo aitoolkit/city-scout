@@ -18,18 +18,53 @@ Type a city name. The tool scrapes four public data sources in parallel, feeds t
 
 ## How it works
 
-```
-User types a city
-  → FastAPI backend
-    → Scrapling scraper (4 sources, concurrent)
-        ├── ReliefWeb API   — UN OCHA humanitarian & crisis reports
-        ├── Reddit JSON API — public community discussions (no auth)
-        ├── Google News RSS — latest headlines
-        └── Wikipedia REST  — city background context
-    → Signal list trimmed to token budget (no 413 errors)
-    → LLM prompt → structured JSON response
-  → Risk report: 5 categories, score 0-100, key sources
-```
+### Step 1 — Request intake ([`back/main.py`](back/main.py))
+
+The frontend sends a `POST /api/assess` request with a city name. FastAPI validates it (2–100 chars) via a Pydantic model and passes it to the pipeline.
+
+### Step 2 — Concurrent scraping ([`back/scraper.py`](back/scraper.py))
+
+Four scrapers run in parallel via `ThreadPoolExecutor`. Each targets a different type of public source:
+
+| Source | Query strategy | What it returns |
+|---|---|---|
+| **ReliefWeb** (UN OCHA) | `{city} disaster OR crisis OR conflict OR risk` | Humanitarian & crisis reports with date and publisher |
+| **Reddit** | `{city} safety risk crime disaster` — sorted by `new`, last month | Post titles + text snippets |
+| **Google News** | `{city} danger OR safety OR violence OR disaster OR unrest` | RSS headlines with publication date |
+| **Wikipedia** | Direct page summary for the city slug | Background context (population, geography, political status) |
+
+All endpoints are free and require no authentication. Scrapling handles stealth headers to reduce bot-detection blocks.
+
+### Step 3 — Token budget enforcement ([`back/analyzer.py`](back/analyzer.py) → `_build_user_message`)
+
+Raw signals are assembled into a prompt one by one. Two guards prevent hitting API token limits:
+
+1. **`MAX_SIGNALS`** (default: 20) — hard cap on the number of signals considered.
+2. **`MAX_PROMPT_CHARS`** (default: 12 000 chars ≈ 3 000 tokens) — the loop stops adding signals the moment the running character count would exceed the budget. Each snippet is also pre-truncated to 150 chars.
+
+This makes the tool safe to use on free-tier APIs (e.g. Groq's 6 000-TPM limit) without manual tuning.
+
+### Step 4 — LLM analysis ([`back/analyzer.py`](back/analyzer.py) → `analyze`)
+
+The trimmed signal list is sent to the configured LLM provider with a structured system prompt that enforces a specific JSON schema. The prompt instructs the model to:
+- score each of the 5 risk categories from 0 to 100
+- map scores to severity levels (low / medium / high / critical)
+- cite only evidence present in the signals (no speculation)
+- return only a JSON object — no markdown fences, no prose
+
+The provider abstraction (`LLMProvider` ABC) means the same prompt works identically whether the backend is Anthropic, a local Ollama model, or any OpenAI-compatible API.
+
+### Step 5 — Response parsing and validation ([`back/analyzer.py`](back/analyzer.py) → `_parse_response`)
+
+The raw LLM output goes through two cleanup passes:
+- **`_extract_json`** — strips markdown fences and prose that some models add despite instructions, then extracts the outermost `{ … }` block.
+- **`_sanitize_sources`** — drops any `key_sources` entries that are not absolute `http(s)://` URLs (guards against hallucinated or relative paths).
+
+The cleaned JSON is validated into a `RiskReport` Pydantic model and returned as the API response.
+
+### Step 6 — Rendering ([`front/app.js`](front/app.js))
+
+The frontend receives the `RiskReport` JSON and renders the five category cards, the overall score badge, the executive summary, and the clickable source URLs — all without a page reload.
 
 ---
 
